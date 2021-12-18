@@ -1,6 +1,7 @@
 import datetime
 import logging
 import multiprocessing as mp
+import shared_memory
 import os
 import queue
 import signal
@@ -159,7 +160,7 @@ def run_detector(
 
     outputs = {}
     for name in out_events.keys():
-        out_shm = mp.shared_memory.SharedMemory(name=f"out-{name}", create=False)
+        out_shm = shared_memory.SharedMemory(name=f"out-{name}", create=False)
         out_np = np.ndarray((20, 6), dtype=np.float32, buffer=out_shm.buf)
         outputs[name] = {"shm": out_shm, "np": out_np}
 
@@ -248,11 +249,11 @@ class RemoteObjectDetector:
         self.fps = EventsPerSecond()
         self.detection_queue = detection_queue
         self.event = event
-        self.shm = mp.shared_memory.SharedMemory(name=self.name, create=False)
+        self.shm = shared_memory.SharedMemory(name=self.name, create=False)
         self.np_shm = np.ndarray(
             (1, model_shape[0], model_shape[1], 3), dtype=np.uint8, buffer=self.shm.buf
         )
-        self.out_shm = mp.shared_memory.SharedMemory(
+        self.out_shm = shared_memory.SharedMemory(
             name=f"out-{self.name}", create=False
         )
         self.out_np_shm = np.ndarray((20, 6), dtype=np.float32, buffer=self.out_shm.buf)

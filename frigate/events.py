@@ -142,12 +142,14 @@ class EventCleanup(threading.Thread):
                 media_path = Path(
                     f"{os.path.join(CLIPS_DIR, media_name)}.{file_extension}"
                 )
-                media_path.unlink(missing_ok=True)
+                if media_path.exists():
+                    media_path.unlink()
                 if file_extension == "jpg":
                     media_path = Path(
                         f"{os.path.join(CLIPS_DIR, media_name)}-clean.png"
                     )
-                    media_path.unlink(missing_ok=True)
+                    if media_path.exists():
+                        media_path.unlink()
 
             # update the clips attribute for the db entry
             update_query = Event.update(update_params).where(
@@ -187,12 +189,14 @@ class EventCleanup(threading.Thread):
                     media_path = Path(
                         f"{os.path.join(CLIPS_DIR, media_name)}.{file_extension}"
                     )
-                    media_path.unlink(missing_ok=True)
+                    if media_path.exists():
+                        media_path.unlink()
                     if file_extension == "jpg":
                         media_path = Path(
                             f"{os.path.join(CLIPS_DIR, media_name)}-clean.png"
                         )
-                        media_path.unlink(missing_ok=True)
+                        if media_path.exists():
+                            media_path.unlink()
                 # update the clips attribute for the db entry
                 update_query = Event.update(update_params).where(
                     Event.camera == name,
@@ -223,11 +227,14 @@ class EventCleanup(threading.Thread):
             logger.debug(f"Removing duplicate: {event.id}")
             media_name = f"{event.camera}-{event.id}"
             media_path = Path(f"{os.path.join(CLIPS_DIR, media_name)}.jpg")
-            media_path.unlink(missing_ok=True)
+            if media_path.exists():
+                media_path.unlink()
             media_path = Path(f"{os.path.join(CLIPS_DIR, media_name)}-clean.png")
-            media_path.unlink(missing_ok=True)
+            if media_path.exists():
+                media_path.unlink()
             media_path = Path(f"{os.path.join(CLIPS_DIR, media_name)}.mp4")
-            media_path.unlink(missing_ok=True)
+            if media_path.exists():
+                media_path.unlink()
 
         (
             Event.delete()

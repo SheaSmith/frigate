@@ -135,10 +135,12 @@ def delete_event(id):
     media_name = f"{event.camera}-{event.id}"
     if event.has_snapshot:
         media = Path(f"{os.path.join(CLIPS_DIR, media_name)}.jpg")
-        media.unlink(missing_ok=True)
+        if media.exists():
+            media.unlink()
     if event.has_clip:
         media = Path(f"{os.path.join(CLIPS_DIR, media_name)}.mp4")
-        media.unlink(missing_ok=True)
+        if media.exists():
+            media.unlink()
 
     event.delete_instance()
     return make_response(
@@ -726,7 +728,7 @@ def recording_clip(camera, start_ts, end_ts):
         ffmpeg_cmd,
         input="\n".join(playlist_lines),
         encoding="ascii",
-        capture_output=True,
+        stdout=sp.PIPE, stderr=sp.PIPE,
     )
     if p.returncode != 0:
         logger.error(p.stderr)

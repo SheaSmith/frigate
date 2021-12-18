@@ -1,4 +1,7 @@
-from __future__ import annotations
+# -*- coding: future_annotations -*-
+import future_annotations
+
+future_annotations.register()
 
 import json
 import logging

@@ -7,6 +7,7 @@ import random
 import shutil
 import string
 import subprocess as sp
+from subprocess import PIPE
 import threading
 from collections import defaultdict
 from pathlib import Path
@@ -98,7 +99,9 @@ class RecordingMaintainer(threading.Thread):
                 )
                 to_remove = sorted_recordings[:-keep_count]
                 for f in to_remove:
-                    Path(f["cache_path"]).unlink(missing_ok=True)
+                    cache_path_file = Path(f["cache_path"])
+                    if cache_path_file.exists():
+                        cache_path_file.unlink()
                     self.end_time_cache.pop(f["cache_path"], None)
                 grouped_recordings[camera] = sorted_recordings[-keep_count:]
 
@@ -124,7 +127,9 @@ class RecordingMaintainer(threading.Thread):
                     not camera in self.config.cameras
                     or not self.config.cameras[camera].record.enabled
                 ):
-                    Path(cache_path).unlink(missing_ok=True)
+                    cache_path_file = Path(cache_path)
+                    if cache_path_file.exists():
+                        cache_path_file.unlink()
                     self.end_time_cache.pop(cache_path, None)
                     continue
 
@@ -141,14 +146,16 @@ class RecordingMaintainer(threading.Thread):
                         "default=noprint_wrappers=1:nokey=1",
                         f"{cache_path}",
                     ]
-                    p = sp.run(ffprobe_cmd, capture_output=True)
+                    p = sp.run(ffprobe_cmd, stdout=PIPE, stderr=PIPE)
                     if p.returncode == 0:
                         duration = float(p.stdout.decode().strip())
                         end_time = start_time + datetime.timedelta(seconds=duration)
                         self.end_time_cache[cache_path] = (end_time, duration)
                     else:
                         logger.warning(f"Discarding a corrupt recording segment: {f}")
-                        Path(cache_path).unlink(missing_ok=True)
+                        cache_path_file = Path(cache_path)
+                        if cache_path_file.exists():
+                            cache_path_file.unlink()
                         continue
 
                 # if cached file's start_time is earlier than the retain_days for the camera
@@ -224,7 +231,9 @@ class RecordingMaintainer(threading.Thread):
             )
         except Exception as e:
             logger.error(f"Unable to store recording segment {cache_path}")
-            Path(cache_path).unlink(missing_ok=True)
+            cache_path_file = Path(cache_path)
+            if cache_path_file.exists():
+                cache_path_file.unlink()
             logger.error(e)
 
         # clear end_time cache
@@ -267,7 +276,8 @@ class RecordingCleanup(threading.Thread):
             logger.debug(f"Checking tmp clip {p}.")
             if p.stat().st_mtime < (datetime.datetime.now().timestamp() - 60 * 1):
                 logger.debug("Deleting tmp clip.")
-                p.unlink(missing_ok=True)
+                if p.exists():
+                    p.unlink()
 
     def expire_recordings(self):
         logger.debug("Start expire recordings (new).")
@@ -285,7 +295,9 @@ class RecordingCleanup(threading.Thread):
 
         deleted_recordings = set()
         for recording in no_camera_recordings:
-            Path(recording.path).unlink(missing_ok=True)
+            recording_file = Path(recording.path)
+            if recording_file.exists():
+                recording_file.unlink()
             deleted_recordings.add(recording.id)
 
         logger.debug(f"Expiring {len(deleted_recordings)} recordings")
@@ -360,7 +372,9 @@ class RecordingCleanup(threading.Thread):
 
                 # Delete recordings outside of the retention window
                 if not keep:
-                    Path(recording.path).unlink(missing_ok=True)
+                    recording_file = Path(recording.path)
+                    if recording_file.exists():
+                        recording_file.unlink()
                     deleted_recordings.add(recording.id)
 
             logger.debug(f"Expiring {len(deleted_recordings)} recordings")
@@ -401,8 +415,8 @@ class RecordingCleanup(threading.Thread):
         logger.debug(f"Oldest recording in the db: {oldest_timestamp}")
         process = sp.run(
             ["find", RECORD_DIR, "-type", "f", "!", "-newermt", f"@{oldest_timestamp}"],
-            capture_output=True,
-            text=True,
+            stdout=PIPE, stderr=PIPE,
+            universal_newlines=True,
         )
         files_to_check = process.stdout.splitlines()
 
@@ -410,7 +424,8 @@ class RecordingCleanup(threading.Thread):
             p = Path(f)
             try:
                 if p.stat().st_mtime < delete_before.get(p.parent.name, default_expire):
-                    p.unlink(missing_ok=True)
+                    if p.exists():
+                        p.unlink()
             except FileNotFoundError:
                 logger.warning(f"Attempted to expire missing file: {f}")
 
@@ -425,8 +440,8 @@ class RecordingCleanup(threading.Thread):
         # get all recordings files on disk
         process = sp.run(
             ["find", RECORD_DIR, "-type", "f"],
-            capture_output=True,
-            text=True,
+            stdout=PIPE, stderr=PIPE,
+            universal_newlines=True,
         )
         files_on_disk = process.stdout.splitlines()
 
