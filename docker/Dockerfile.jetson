@@ -47,11 +47,15 @@ RUN wget -q https://github.com/google-coral/test_data/raw/release-frogfish/ssdli
 
 WORKDIR /opt/frigate/
 ADD frigate frigate/
+ADD jetson_patches jetson_patches/
 ADD migrations migrations/
 
 COPY --from=web /opt/frigate/build web/
 
 COPY docker/rootfs/ /
+
+# Apply Python 3.6 compat patches
+RUN git apply frigate_patches/*.patch
 
 EXPOSE 5000
 EXPOSE 1935
