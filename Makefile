@@ -59,4 +59,9 @@ armv7_frigate: version web
 
 armv7_all: armv7_wheels armv7_ffmpeg armv7_frigate
 
+jetson_all:
+	docker build --tag blakeblackshear/frigate-wheels:1.0.3-jetson --file docker/Dockerfile.wheels.jetson .
+	docker buildx build --platform linux/arm64/v8 --tag blakeblackshear/frigate-nginx:1.0.2 --file docker/Dockerfile.nginx.jetson .
+	docker build --no-cache --tag frigate --file docker/Dockerfile.jetson .
+
 .PHONY: web

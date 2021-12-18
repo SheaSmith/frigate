@@ -1,0 +1,88 @@
+ARG ARCH=amd64
+ARG WHEELS_VERSION
+ARG FFMPEG_VERSION
+ARG NGINX_VERSION
+FROM blakeblackshear/frigate-wheels:${WHEELS_VERSION}-${ARCH} as wheels
+FROM blakeblackshear/frigate-ffmpeg:${FFMPEG_VERSION}-${ARCH} as ffmpeg
+FROM blakeblackshear/frigate-nginx:${NGINX_VERSION}-${ARCH} as nginx
+FROM frigate-web as web
+
+FROM nvcr.io/nvidia/l4t-base:r32.6.1
+LABEL maintainer "blakeb@blakeshome.com"
+
+COPY --from=ffmpeg /usr/local /usr/local/
+
+COPY --from=wheels /wheels/. /wheels/
+
+ENV FLASK_ENV=development
+# ENV FONTCONFIG_PATH=/etc/fonts
+ENV DEBIAN_FRONTEND=noninteractive
+# Install packages for apt repo
+RUN apt-get -qq update \
+    && apt-get upgrade -y \
+    && apt-get -qq install --no-install-recommends -y gnupg wget unzip tzdata libxml2 python3 python3-dev python3-pip curl git gnupg g++ zip unzip libxml2-dev libxslt-dev \
+    && curl --silent --show-error --retry 5 https://bootstrap.pypa.io/get-pip.py | python3 \
+    && python3 -m pip install -U /wheels/*.whl \
+    && APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=DontWarn apt-key adv --fetch-keys https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    && echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" > /etc/apt/sources.list.d/coral-edgetpu.list \
+    && echo "libedgetpu1-max libedgetpu/accepted-eula select true" | debconf-set-selections \
+    && apt-get -qq update && apt-get -qq install --no-install-recommends -y libedgetpu1-max python3-tflite-runtime python3-pycoral python3-matplotlib python3-tk \
+    && rm -rf /var/lib/apt/lists/* /wheels \
+    && (apt-get autoremove -y; apt-get autoclean -y)
+
+RUN pip3 install  --use-deprecated=legacy-resolver \
+    peewee_migrate \
+    pydantic \
+    zeroconf \
+    ws4py \
+    future-annotations \
+    shared-memory38
+
+COPY --from=nginx /usr/local/nginx/ /usr/local/nginx/
+
+# get model and labels
+COPY labelmap.txt /labelmap.txt
+RUN wget -q https://github.com/google-coral/test_data/raw/release-frogfish/ssdlite_mobiledet_coco_qat_postprocess_edgetpu.tflite -O /edgetpu_model.tflite
+RUN wget -q https://github.com/google-coral/test_data/raw/release-frogfish/ssdlite_mobiledet_coco_qat_postprocess.tflite -O /cpu_model.tflite
+
+WORKDIR /opt/frigate/
+ADD frigate frigate/
+ADD migrations migrations/
+
+COPY --from=web /opt/frigate/build web/
+
+COPY docker/rootfs/ /
+
+EXPOSE 5000
+EXPOSE 1935
+
+ENV DEBIAN_FRONTEND=noninteractive
+# Install packages for apt repo
+RUN apt-get -qq update \
+    && apt-get -qq install --no-install-recommends -y \
+    # ffmpeg runtime dependencies
+    libgomp1 \
+    # runtime dependencies
+    libopenexr-dev \
+    libgstreamer1.0-0 \
+    libgstreamer-plugins-base1.0-0 \
+    libopenblas-base \
+    libjpeg-turbo8 \
+    libpng16-16 \
+    libtiff5 \
+    libdc1394-22 \
+    libxcb1 \
+    libxcb-shape0 \
+    libxcb-shm0 \
+    libxcb-xfixes0 \
+    libass9 \
+    && rm -rf /var/lib/apt/lists/* \
+    && (apt-get autoremove -y; apt-get autoclean -y)
+
+# s6-overlay
+ADD https://github.com/just-containers/s6-overlay/releases/download/v2.2.0.3/s6-overlay-aarch64-installer /tmp/
+RUN chmod +x /tmp/s6-overlay-aarch64-installer && /tmp/s6-overlay-aarch64-installer /
+
+ENTRYPOINT ["/init"]
+
+CMD ["python3", "-u", "-m", "frigate"]
